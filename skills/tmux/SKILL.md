@@ -4,7 +4,22 @@ description: Remote-control tmux sessions for interactive CLIs by sending keystr
 metadata:
   {
     "openclaw":
-      { "emoji": "🧵", "os": ["darwin", "linux"], "requires": { "bins": ["tmux"] }, "access": {} },
+      {
+        "emoji": "🧵",
+        "os": ["darwin", "linux"],
+        "requires": { "bins": ["tmux"] },
+        "access": {},
+        "install":
+          [
+            {
+              "id": "brew",
+              "kind": "brew",
+              "formula": "tmux",
+              "bins": ["tmux"],
+              "label": "Install tmux (brew)",
+            },
+          ],
+      },
   }
 ---
 

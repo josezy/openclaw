@@ -8,6 +8,23 @@ metadata:
         "emoji": "🧩",
         "requires": { "anyBins": ["claude", "codex", "opencode", "pi"] },
         "access": {},
+        "install":
+          [
+            {
+              "id": "node-claude",
+              "kind": "node",
+              "package": "@anthropic-ai/claude-code",
+              "bins": ["claude"],
+              "label": "Install Claude Code CLI (npm)",
+            },
+            {
+              "id": "node-codex",
+              "kind": "node",
+              "package": "@openai/codex",
+              "bins": ["codex"],
+              "label": "Install Codex CLI (npm)",
+            },
+          ],
       },
   }
 ---

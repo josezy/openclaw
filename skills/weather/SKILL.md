@@ -5,7 +5,21 @@ homepage: https://wttr.in/:help
 metadata:
   {
     "openclaw":
-      { "emoji": "☔", "requires": { "bins": ["curl"] }, "access": { "domains": ["wttr.in"] } },
+      {
+        "emoji": "☔",
+        "requires": { "bins": ["curl"] },
+        "access": { "domains": ["wttr.in"] },
+        "install":
+          [
+            {
+              "id": "brew",
+              "kind": "brew",
+              "formula": "curl",
+              "bins": ["curl"],
+              "label": "Install curl (brew)",
+            },
+          ],
+      },
   }
 ---
 
