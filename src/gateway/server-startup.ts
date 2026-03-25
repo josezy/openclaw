@@ -24,6 +24,7 @@ import {
 } from "../hooks/internal-hooks.js";
 import { loadInternalHooks } from "../hooks/loader.js";
 import { isTruthyEnvValue } from "../infra/env.js";
+import { ensureGlobalUndiciEnvProxyDispatcher } from "../infra/net/undici-global-dispatcher.js";
 import type { loadOpenClawPlugins } from "../plugins/loader.js";
 import { type PluginServicesHandle, startPluginServices } from "../plugins/services.js";
 import { startBrowserControlServerIfEnabled } from "./server-browser.js";
@@ -153,6 +154,23 @@ export async function startGatewaySidecars(params: {
     params.logHooks.error(`failed to load hooks: ${String(err)}`);
   }
 
+  // Activate env-proxy-aware global fetch dispatcher so all outbound HTTP
+  // respects HTTP_PROXY / HTTPS_PROXY when running inside greywall.
+  ensureGlobalUndiciEnvProxyDispatcher();
+
+  // Start plugin services before channels so services like greywall can
+  // seed network proxy rules before channel providers attempt to connect.
+  let pluginServices: PluginServicesHandle | null = null;
+  try {
+    pluginServices = await startPluginServices({
+      registry: params.pluginRegistry,
+      config: params.cfg,
+      workspaceDir: params.defaultWorkspaceDir,
+    });
+  } catch (err) {
+    params.log.warn(`plugin services failed to start: ${String(err)}`);
+  }
+
   // Launch configured channels so gateway replies via the surface the message came from.
   // Tests can opt out via OPENCLAW_SKIP_CHANNELS (or legacy OPENCLAW_SKIP_PROVIDERS).
   const skipChannels =
@@ -183,17 +201,6 @@ export async function startGatewaySidecars(params: {
       });
       void triggerInternalHook(hookEvent);
     }, 250);
-  }
-
-  let pluginServices: PluginServicesHandle | null = null;
-  try {
-    pluginServices = await startPluginServices({
-      registry: params.pluginRegistry,
-      config: params.cfg,
-      workspaceDir: params.defaultWorkspaceDir,
-    });
-  } catch (err) {
-    params.log.warn(`plugin services failed to start: ${String(err)}`);
   }
 
   if (params.cfg.acp?.enabled) {

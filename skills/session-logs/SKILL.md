@@ -7,6 +7,7 @@ metadata:
       {
         "emoji": "📜",
         "requires": { "bins": ["jq", "rg"] },
+        "access": {},
         "install":
           [
             {

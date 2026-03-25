@@ -8,6 +8,7 @@ metadata:
         "emoji": "📞",
         "skillKey": "voice-call",
         "requires": { "config": ["plugins.entries.voice-call.enabled"] },
+        "access": {},
       },
   }
 ---

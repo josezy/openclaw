@@ -19,6 +19,7 @@ metadata:
               "label": "Install imsg (brew)",
             },
           ],
+        "access": {},
       },
   }
 ---

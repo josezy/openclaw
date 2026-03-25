@@ -7,6 +7,7 @@ metadata:
       {
         "emoji": "🧩",
         "requires": { "anyBins": ["claude", "codex", "opencode", "pi"] },
+        "access": {},
         "install":
           [
             {

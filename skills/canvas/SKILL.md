@@ -1,3 +1,10 @@
+---
+name: canvas
+description: Display HTML content on connected OpenClaw nodes (Mac app, iOS, Android).
+metadata: { "openclaw": { "access": {} } }
+allowed-tools: ["canvas"]
+---
+
 # Canvas Skill
 
 Display HTML content on connected OpenClaw nodes (Mac app, iOS, Android).

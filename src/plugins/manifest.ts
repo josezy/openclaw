@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { MANIFEST_KEY } from "../compat/legacy-names.js";
+import type { AccessManifest } from "../infra/access-manifest.js";
 import { matchBoundaryFileOpenFailure, openBoundaryFileSync } from "../infra/boundary-file-read.js";
 import { isRecord } from "../utils.js";
 import type { PluginConfigUiHint, PluginKind } from "./types.js";
@@ -27,6 +28,7 @@ export type PluginManifest = {
   description?: string;
   version?: string;
   uiHints?: Record<string, PluginConfigUiHint>;
+  access?: AccessManifest;
 };
 
 export type PluginManifestProviderAuthChoice = {
@@ -212,6 +214,11 @@ export function loadPluginManifest(
     uiHints = raw.uiHints as Record<string, PluginConfigUiHint>;
   }
 
+  let access: AccessManifest | undefined;
+  if (isRecord(raw.access)) {
+    access = raw.access as AccessManifest;
+  }
+
   return {
     ok: true,
     manifest: {
@@ -228,6 +235,7 @@ export function loadPluginManifest(
       description,
       version,
       uiHints,
+      access,
     },
     manifestPath,
   };

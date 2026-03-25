@@ -24,6 +24,12 @@ metadata:
               "label": "Install GitHub CLI (apt)",
             },
           ],
+        "access":
+          {
+            "domains": ["github.com", "api.github.com", "*.githubusercontent.com"],
+            "read": ["~/.config/gh"],
+            "write": ["~/.config/gh", "~/.cache/gh"],
+          },
       },
   }
 ---

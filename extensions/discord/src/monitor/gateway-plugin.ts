@@ -265,12 +265,25 @@ function createGatewayPlugin(params: {
   return new SafeGatewayPlugin();
 }
 
+function resolveGatewayProxyUrl(discordConfig?: DiscordAccountConfig): string | undefined {
+  const explicit = discordConfig?.proxy?.trim();
+  if (explicit) return explicit;
+  // Fall back to standard proxy env vars (e.g. when running inside greywall)
+  return (
+    process.env.https_proxy?.trim() ||
+    process.env.HTTPS_PROXY?.trim() ||
+    process.env.http_proxy?.trim() ||
+    process.env.HTTP_PROXY?.trim() ||
+    undefined
+  );
+}
+
 export function createDiscordGatewayPlugin(params: {
   discordConfig: DiscordAccountConfig;
   runtime: RuntimeEnv;
 }): GatewayPlugin {
   const intents = resolveDiscordGatewayIntents(params.discordConfig?.intents);
-  const proxy = params.discordConfig?.proxy?.trim();
+  const proxy = resolveGatewayProxyUrl(params.discordConfig);
   const options = {
     reconnect: { maxAttempts: 50 },
     intents,

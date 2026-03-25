@@ -19,6 +19,7 @@ metadata:
               "label": "Install things3-cli (go)",
             },
           ],
+        "access": {},
       },
   }
 ---

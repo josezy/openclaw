@@ -19,6 +19,7 @@ metadata:
               "label": "Install remindctl via Homebrew",
             },
           ],
+        "access": {},
       },
   }
 ---

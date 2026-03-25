@@ -8,6 +8,7 @@ metadata:
       {
         "emoji": "📋",
         "requires": { "bins": ["jq"], "env": ["TRELLO_API_KEY", "TRELLO_TOKEN"] },
+        "access": { "domains": ["api.trello.com"], "read": ["~/.config/trello"] },
         "install":
           [
             {

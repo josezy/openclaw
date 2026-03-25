@@ -1,4 +1,7 @@
 import { randomUUID } from "node:crypto";
+import http from "node:http";
+import https from "node:https";
+import net from "node:net";
 import { WebSocket, type ClientOptions, type CertMeta } from "ws";
 import {
   clearDeviceAuthToken,
@@ -11,6 +14,7 @@ import {
   publicKeyRawBase64UrlFromPem,
   signDevicePayload,
 } from "../infra/device-identity.js";
+import { hasProxyEnvConfigured } from "../infra/net/proxy-env.js";
 import { normalizeFingerprint } from "../infra/tls/fingerprint.js";
 import { rawDataToString } from "../infra/ws.js";
 import { logDebug, logError } from "../logger.js";
@@ -107,6 +111,152 @@ export type GatewayClientOptions = {
   onClose?: (code: number, reason: string) => void;
   onGap?: (info: { expected: number; received: number }) => void;
 };
+
+// Direct agents for loopback proxy bypass (non-SOCKS HTTP proxy case).
+const directHttpAgent = new http.Agent();
+const directHttpsAgent = new https.Agent();
+
+// ── SOCKS5 tunnel for greywall sandbox ────────────────────────────────
+//
+// When running inside a greywall sandbox, macOS Seatbelt blocks ALL outbound
+// TCP at the kernel level — only connections to the SOCKS5 proxy port are
+// permitted. The ws library doesn't natively support SOCKS5, so we implement
+// a minimal SOCKS5 CONNECT handshake and wrap it in an http.Agent.
+
+const SOCKS5_HANDSHAKE_TIMEOUT_MS = 10_000;
+
+/**
+ * Resolve a SOCKS5 proxy URL from environment variables.
+ * Returns null if no SOCKS5 proxy is configured (HTTP proxies are ignored).
+ * Matches socks5://, socks5h://, socks://, socksh:// — the "h" suffix means
+ * "remote DNS resolution" (greywall uses socks5h://).
+ */
+function resolveSocks5ProxyUrl(env: NodeJS.ProcessEnv = process.env): URL | null {
+  const keys = ["all_proxy", "ALL_PROXY", "http_proxy", "HTTP_PROXY", "https_proxy", "HTTPS_PROXY"];
+  for (const key of keys) {
+    const value = env[key]?.trim();
+    if (value && /^socks5?h?:\/\//i.test(value)) {
+      try {
+        return new URL(value);
+      } catch {
+        continue;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Create an http.Agent that tunnels connections through a SOCKS5 proxy.
+ * Used so the `ws` library can establish WebSocket connections from inside
+ * a greywall/Seatbelt sandbox where direct outbound TCP is blocked.
+ */
+function createSocks5TunnelAgent(
+  proxyUrl: URL,
+  targetHost: string,
+  targetPort: number,
+): http.Agent {
+  const agent = new http.Agent({ keepAlive: false });
+  const proxyHost = proxyUrl.hostname.replace(/^\[|]$/g, "");
+  const proxyPort = Number(proxyUrl.port) || 1080;
+
+  // Extract credentials for SOCKS5 username/password auth (RFC 1929).
+  // Greywall sets URLs like socks5h://node:proxy@localhost:43052.
+  const username = decodeURIComponent(proxyUrl.username || "");
+  const password = decodeURIComponent(proxyUrl.password || "");
+  const hasAuth = username.length > 0;
+
+  // Override createConnection to tunnel through SOCKS5.
+  // Returns void (falsy) so Node.js waits for the callback instead of using
+  // the return value directly — needed because the SOCKS5 handshake is async.
+  // oxlint-disable-next-line typescript/no-explicit-any
+  (agent as any).createConnection = (
+    _options: Record<string, unknown>,
+    cb: (err: Error | null, socket?: net.Socket) => void,
+  ): void => {
+    let done = false;
+    const fail = (err: Error, socket?: net.Socket) => {
+      if (done) return;
+      done = true;
+      socket?.destroy();
+      cb(err);
+    };
+
+    const sendConnect = (socket: net.Socket) => {
+      // CONNECT request — IPv4 address type (0x01)
+      const ipParts = targetHost.split(".").map(Number);
+      const portBuf = Buffer.alloc(2);
+      portBuf.writeUInt16BE(targetPort);
+      socket.write(Buffer.from([0x05, 0x01, 0x00, 0x01, ...ipParts, portBuf[0]!, portBuf[1]!]));
+
+      // Read CONNECT response
+      socket.once("data", (reply: Buffer) => {
+        if (done) return;
+        done = true;
+        socket.setTimeout(0);
+
+        if (reply.length < 2 || reply[0] !== 0x05 || reply[1] !== 0x00) {
+          socket.destroy();
+          return cb(new Error(`SOCKS5 CONNECT failed (reply=${reply[1]})`));
+        }
+        // Tunnel established — hand the socket to ws.
+        cb(null, socket);
+      });
+    };
+
+    const socket = net.connect({ host: proxyHost, port: proxyPort }, () => {
+      // Greeting: offer no-auth (0x00) and optionally user/pass (0x02)
+      if (hasAuth) {
+        socket.write(Buffer.from([0x05, 0x02, 0x00, 0x02]));
+      } else {
+        socket.write(Buffer.from([0x05, 0x01, 0x00]));
+      }
+    });
+
+    socket.on("error", (err) => fail(err, socket));
+    socket.setTimeout(SOCKS5_HANDSHAKE_TIMEOUT_MS, () =>
+      fail(new Error("SOCKS5 handshake timeout"), socket),
+    );
+
+    // Read greeting response
+    socket.once("data", (greeting: Buffer) => {
+      if (done) return;
+      if (greeting.length < 2 || greeting[0] !== 0x05) {
+        return fail(new Error("SOCKS5 greeting failed"), socket);
+      }
+
+      const authMethod = greeting[1];
+
+      if (authMethod === 0x00) {
+        // No auth required — proceed to CONNECT
+        sendConnect(socket);
+      } else if (authMethod === 0x02 && hasAuth) {
+        // Username/password auth (RFC 1929)
+        const userBuf = Buffer.from(username, "utf8");
+        const passBuf = Buffer.from(password, "utf8");
+        const authReq = Buffer.alloc(3 + userBuf.length + passBuf.length);
+        authReq[0] = 0x01; // auth version
+        authReq[1] = userBuf.length;
+        userBuf.copy(authReq, 2);
+        authReq[2 + userBuf.length] = passBuf.length;
+        passBuf.copy(authReq, 3 + userBuf.length);
+        socket.write(authReq);
+
+        socket.once("data", (authReply: Buffer) => {
+          if (done) return;
+          if (authReply.length < 2 || authReply[1] !== 0x00) {
+            return fail(new Error("SOCKS5 auth rejected"), socket);
+          }
+          sendConnect(socket);
+        });
+      } else {
+        return fail(new Error(`SOCKS5 unsupported auth method: ${authMethod}`), socket);
+      }
+    });
+  };
+
+  return agent;
+}
 
 export const GATEWAY_CLOSE_CODE_HINTS: Readonly<Record<number, string>> = {
   1000: "normal closure",
@@ -225,6 +375,29 @@ export class GatewayClient {
         return undefined;
         // oxlint-disable-next-line typescript/no-explicit-any
       }) as any;
+    }
+    // Proxy handling for loopback gateway connections.
+    // When a SOCKS5 proxy is set (greywall sandbox), Seatbelt blocks ALL direct
+    // outbound TCP at the kernel level — we MUST route through the SOCKS5 proxy.
+    // For non-SOCKS proxies, bypass for loopback to avoid unnecessary round-trips.
+    const socks5 = resolveSocks5ProxyUrl();
+    if (hasProxyEnvConfigured() || socks5) {
+      try {
+        const parsed = new URL(url);
+        if (isLoopbackHost(parsed.hostname)) {
+          if (socks5) {
+            wsOptions.agent = createSocks5TunnelAgent(
+              socks5,
+              parsed.hostname,
+              Number(parsed.port) || 18789,
+            );
+          } else {
+            wsOptions.agent = url.startsWith("wss:") ? directHttpsAgent : directHttpAgent;
+          }
+        }
+      } catch {
+        // invalid URL — let WebSocket constructor handle it
+      }
     }
     const ws = new WebSocket(url, wsOptions);
     this.ws = ws;

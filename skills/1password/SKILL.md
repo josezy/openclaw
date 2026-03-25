@@ -18,6 +18,7 @@ metadata:
               "label": "Install 1Password CLI (brew)",
             },
           ],
+        "access": {},
       },
   }
 ---

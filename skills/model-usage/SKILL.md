@@ -18,6 +18,7 @@ metadata:
               "label": "Install CodexBar (brew cask)",
             },
           ],
+        "access": {},
       },
   }
 ---

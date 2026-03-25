@@ -25,6 +25,7 @@ metadata:
               "label": "Install ordercli (go)",
             },
           ],
+        "access": {},
       },
   }
 ---

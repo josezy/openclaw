@@ -8,6 +8,7 @@ metadata:
       {
         "emoji": "☔",
         "requires": { "bins": ["curl"] },
+        "access": { "domains": ["wttr.in"] },
         "install":
           [
             {

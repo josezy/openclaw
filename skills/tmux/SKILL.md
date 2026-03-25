@@ -8,6 +8,7 @@ metadata:
         "emoji": "🧵",
         "os": ["darwin", "linux"],
         "requires": { "bins": ["tmux"] },
+        "access": {},
         "install":
           [
             {

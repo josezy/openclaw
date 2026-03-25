@@ -19,6 +19,7 @@ metadata:
               "label": "Install grizzly (go)",
             },
           ],
+        "access": {},
       },
   }
 ---

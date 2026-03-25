@@ -1,0 +1,13 @@
+{
+  "id": "greywall",
+  "enabledByDefault": true,
+  "configSchema": {
+    "type": "object",
+    "properties": {}
+  },
+  "name": "Greywall",
+  "description": "Network monitoring and control via GreyProxy sandbox proxy",
+  "access": {
+    "domains": ["localhost"]
+  }
+}
