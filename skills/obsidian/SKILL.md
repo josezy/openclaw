@@ -18,6 +18,7 @@ metadata:
               "label": "Install obsidian-cli (brew)",
             },
           ],
+        "access": {},
       },
   }
 ---

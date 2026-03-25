@@ -19,6 +19,7 @@ metadata:
               "label": "Install memo via Homebrew",
             },
           ],
+        "access": {},
       },
   }
 ---

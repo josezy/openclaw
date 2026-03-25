@@ -18,6 +18,7 @@ metadata:
               "label": "Install camsnap (brew)",
             },
           ],
+        "access": {},
       },
   }
 ---

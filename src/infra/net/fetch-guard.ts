@@ -1,4 +1,4 @@
-import { EnvHttpProxyAgent, type Dispatcher } from "undici";
+import { EnvHttpProxyAgent, ProxyAgent, type Dispatcher } from "undici";
 import { logWarn } from "../../logger.js";
 import { bindAbortRelay } from "../../utils/fetch-timeout.js";
 import { hasProxyEnvConfigured } from "./proxy-env.js";
@@ -78,6 +78,22 @@ export function withTrustedEnvProxyGuardedFetchMode(
   params: GuardedFetchPresetOptions,
 ): GuardedFetchOptions {
   return { ...params, mode: GUARDED_FETCH_MODE.TRUSTED_ENV_PROXY };
+}
+
+/**
+ * Resolve a SOCKS5 proxy URL from env vars, normalizing `socks5h://` to `socks5://`.
+ * `socks5h` means remote DNS via the proxy — undici's Socks5ProxyAgent sends domain
+ * names as SOCKS5 DOMAIN address type which achieves the same behavior.
+ */
+function resolveSocksProxyUrl(env: NodeJS.ProcessEnv = process.env): string | null {
+  const keys = ["all_proxy", "ALL_PROXY", "http_proxy", "HTTP_PROXY", "https_proxy", "HTTPS_PROXY"];
+  for (const key of keys) {
+    const value = env[key]?.trim();
+    if (value && /^socks5?h?:\/\//i.test(value)) {
+      return value.replace(/^socks5?h?:\/\//i, "socks5://");
+    }
+  }
+  return null;
 }
 
 function resolveGuardedFetchMode(params: GuardedFetchOptions): GuardedFetchMode {
@@ -189,15 +205,28 @@ export async function fetchWithSsrFGuard(params: GuardedFetchOptions): Promise<G
 
     let dispatcher: Dispatcher | null = null;
     try {
-      const pinned = await resolvePinnedHostnameWithPolicy(parsedUrl.hostname, {
-        lookupFn: params.lookupFn,
-        policy: params.policy,
-      });
       const canUseTrustedEnvProxy =
         mode === GUARDED_FETCH_MODE.TRUSTED_ENV_PROXY && hasProxyEnvConfigured();
+
+      // When using an env proxy (greywall sandbox), skip DNS pinning — the proxy
+      // handles DNS resolution, and Seatbelt may block direct DNS lookups.
+      const pinned = canUseTrustedEnvProxy
+        ? null
+        : await resolvePinnedHostnameWithPolicy(parsedUrl.hostname, {
+            lookupFn: params.lookupFn,
+            policy: params.policy,
+          });
       if (canUseTrustedEnvProxy) {
-        dispatcher = new EnvHttpProxyAgent();
-      } else if (params.pinDns !== false) {
+        // Prefer SOCKS5 proxy (from ALL_PROXY) — undici's EnvHttpProxyAgent only
+        // handles HTTP CONNECT proxies and may fail in sandboxed environments
+        // where DNS or direct TCP is restricted.
+        const socksUrl = resolveSocksProxyUrl();
+        if (socksUrl) {
+          dispatcher = new ProxyAgent({ uri: socksUrl });
+        } else {
+          dispatcher = new EnvHttpProxyAgent();
+        }
+      } else if (params.pinDns !== false && pinned) {
         dispatcher = createPinnedDispatcher(pinned, params.dispatcherPolicy, params.policy);
       }
 
@@ -247,6 +276,13 @@ export async function fetchWithSsrFGuard(params: GuardedFetchOptions): Promise<G
         const context = params.auditContext ?? "url-fetch";
         logWarn(
           `security: blocked URL fetch (${context}) target=${parsedUrl.origin}${parsedUrl.pathname} reason=${err.message}`,
+        );
+      } else if (err instanceof Error && err.cause) {
+        // Surface the real cause for network errors (undici wraps them as
+        // TypeError: fetch failed with the underlying error in .cause).
+        const cause = err.cause instanceof Error ? err.cause.message : String(err.cause);
+        logWarn(
+          `fetch-guard: ${err.message} cause=${cause} target=${parsedUrl.origin}${parsedUrl.pathname}`,
         );
       }
       await release(dispatcher);

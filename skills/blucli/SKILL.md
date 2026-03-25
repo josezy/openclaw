@@ -18,6 +18,7 @@ metadata:
               "label": "Install blucli (go)",
             },
           ],
+        "access": {},
       },
   }
 ---

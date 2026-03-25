@@ -1,4 +1,5 @@
 import type { Skill } from "@mariozechner/pi-coding-agent";
+import type { AccessManifest } from "../../infra/access-manifest.js";
 
 export type SkillInstallSpec = {
   id?: string;
@@ -30,6 +31,7 @@ export type OpenClawSkillMetadata = {
     config?: string[];
   };
   install?: SkillInstallSpec[];
+  access?: AccessManifest;
 };
 
 export type SkillInvocationPolicy = {

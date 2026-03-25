@@ -26,6 +26,7 @@ metadata:
               "label": "Install spotify_player (brew)",
             },
           ],
+        "access": {},
       },
   }
 ---

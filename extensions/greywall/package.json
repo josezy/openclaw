@@ -1,0 +1,12 @@
+{
+  "name": "@openclaw/greywall-plugin",
+  "version": "2026.3.14",
+  "private": true,
+  "description": "OpenClaw Greywall network monitoring and control via GreyProxy",
+  "type": "module",
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

@@ -109,6 +109,19 @@ const coreEntries: CoreCliEntry[] = [
   {
     commands: [
       {
+        name: "greywall",
+        description: "Greywall sandbox policy management",
+        hasSubcommands: true,
+      },
+    ],
+    register: async ({ program }) => {
+      const mod = await import("./register.greywall.js");
+      mod.registerGreywallCommands(program);
+    },
+  },
+  {
+    commands: [
+      {
         name: "doctor",
         description: "Health checks + quick fixes for the gateway and channels",
         hasSubcommands: false,

@@ -18,6 +18,7 @@ metadata:
               "label": "Install sonoscli (go)",
             },
           ],
+        "access": {},
       },
   }
 ---
